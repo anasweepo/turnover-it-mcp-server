@@ -1,0 +1,59 @@
+{
+  "manifest_version": "0.3",
+  "name": "turnoverit-mcp",
+  "display_name": "Turnover-IT MCP",
+  "version": "1.0.0",
+  "description": "Serveur MCP pour l'API TalentSearch Turnover-IT (recherche candidats, autocomplete métiers/compétences, lieux).",
+  "long_description": "Ce bundle expose l'API publique TalentSearch Turnover-IT via le Model Context Protocol : recherche dans la CVthèque (/users/talentsearch, authentifiée), autocomplete des métiers et compétences, et recherche de lieux. Le jeton API TalentSearch est optionnel si vous n'utilisez que les endpoints publics ; il est stocké localement pour les appels authentifiés.",
+  "author": {
+    "name": "Weepo",
+    "url": "https://github.com/anasweepo/turnover-it-mcp-server"
+  },
+  "homepage": "https://github.com/anasweepo/turnover-it-mcp-server",
+  "documentation": "https://turnover-it.com/docs/TalentSearch/talentsearch-api",
+  "support": "https://github.com/anasweepo/turnover-it-mcp-server/issues",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "TURNOVERIT_API_TOKEN": "${user_config.turnoverit_api_token}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "TalentSearch · Recherche candidats",
+      "description": "[Lecture seule] GET /users/talentsearch — recherche CVthèque (Bearer requis)."
+    },
+    {
+      "name": "TalentSearch · Autocomplete métiers & compétences",
+      "description": "[Lecture seule] GET /jobs_skills/autocomplete — suggestions métiers & compétences."
+    },
+    {
+      "name": "TalentSearch · Recherche lieux",
+      "description": "[Lecture seule] GET /locations/search — lieux (paramètre search)."
+    }
+  ],
+  "tools_generated": false,
+  "keywords": ["turnover-it", "talentsearch", "recrutement", "cvthèque", "mcp"],
+  "license": "MIT",
+  "user_config": {
+    "turnoverit_api_token": {
+      "type": "string",
+      "title": "Jeton API TalentSearch (Bearer)",
+      "description": "Jeton généré dans la section TalentSearch de la plateforme Turnover-IT. Saisir uniquement le jeton ou la valeur complète « Bearer … ». Requis pour get_talent_search ; les autres outils fonctionnent sans.",
+      "sensitive": true,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
