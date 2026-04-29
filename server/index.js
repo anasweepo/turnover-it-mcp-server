@@ -14,12 +14,17 @@ const headersJson = { Accept: "application/json" };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * FIX: les paramètres tableaux doivent utiliser le suffixe "[]"
+ * ex: locations[] availabilities[] contracts[]
+ */
 function buildQuery(params) {
   const usp = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
     if (value === undefined || value === null) continue;
     if (Array.isArray(value)) {
-      for (const item of value) usp.append(key, String(item));
+      // FIX: ajout du suffixe [] pour que l'API Turnover-IT accepte les tableaux
+      for (const item of value) usp.append(`${key}[]`, String(item));
     } else {
       usp.append(key, String(value));
     }
@@ -54,14 +59,7 @@ const READ_ONLY = {
   openWorldHint: true
 };
 
-const queryRecord = z
-  .record(z.union([z.string(), z.number(), z.array(z.string())]))
-  .optional()
-  .describe(
-    "Paramètres de requête additionnels (ex. filtres API Platform : page, itemsPerPage, etc.)."
-  );
-
-const server = new McpServer({ name: "turnoverit", version: "1.0.0" });
+const server = new McpServer({ name: "turnoverit", version: "1.0.1" });
 
 // ─── TalentSearch (authentifié) ──────────────────────────────────────────────
 
@@ -69,14 +67,136 @@ server.registerTool(
   "get_talent_search",
   {
     title: "TalentSearch · Recherche candidats",
-    description:
-      "GET /users/talentsearch — recherche dans la CVthèque Turnover-IT. Nécessite TURNOVERIT_API_TOKEN (Bearer). Les filtres exacts dépendent de votre contrat ; utilisez query pour passer des paramètres d'URL.",
+    description: `Recherche de candidats dans la CVthèque Turnover-IT (GET /users/talentsearch). Nécessite TURNOVERIT_API_TOKEN.
+
+WORKFLOW RECOMMANDÉ :
+1. Appeler get_locations_search pour obtenir la clé de lieu (champ "key", ex: "fr~ile-de-france~paris~")
+2. Appeler get_jobs_skills_autocomplete pour trouver le bon slug de compétence si besoin
+3. Appeler get_talent_search avec les paramètres obtenus
+
+IMPORTANT : Au moins "keywords" ou "profileJobTitle" est requis.
+Chaque candidat retourné consomme 1 crédit (max 1 crédit/candidat/30 jours).`,
     inputSchema: {
-      query: queryRecord
+      keywords: z
+        .string()
+        .max(512)
+        .optional()
+        .describe('Recherche texte libre sur le profil (ex: "react", "développeur python fullstack"). Max 512 caractères. Au moins keywords ou profileJobTitle requis.'),
+
+      profileJobTitle: z
+        .string()
+        .max(250)
+        .optional()
+        .describe('Recherche par intitulé de poste du profil (ex: "Développeur React"). Max 250 caractères.'),
+
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(30)
+        .optional()
+        .describe("Nombre de résultats à retourner (max 30). Défaut : 10."),
+
+      locations: z
+        .array(z.string())
+        .optional()
+        .describe('Clés de lieux obtenues via get_locations_search (champ "key"). Exemple : ["fr~ile-de-france~paris~"]. Toujours utiliser get_locations_search en premier pour obtenir la clé exacte.'),
+
+      locationRadius: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Rayon de recherche géographique en km autour du lieu (ex: 30)."),
+
+      availabilities: z
+        .array(z.enum(["immediate", "within_1_month", "within_2_month", "within_3_month", "more_than_3_month"]))
+        .optional()
+        .describe('Disponibilité du candidat. Valeurs : "immediate" (immédiate), "within_1_month", "within_2_month", "within_3_month", "more_than_3_month".'),
+
+      contracts: z
+        .array(z.enum(["PERMANENT", "TEMPORARY", "FREELANCE", "INTERNSHIP", "APPRENTICESHIP", "INTERCONTRACT"]))
+        .optional()
+        .describe('Types de contrat recherchés : "PERMANENT" (CDI), "TEMPORARY" (CDD), "FREELANCE", "INTERNSHIP" (stage), "APPRENTICESHIP" (alternance), "INTERCONTRACT" (intercontrat).'),
+
+      remoteModes: z
+        .array(z.enum(["none", "partial", "full"]))
+        .optional()
+        .describe('Mode de travail à distance : "none" (présentiel), "partial" (hybride), "full" (full remote).'),
+
+      experienceYears: z
+        .array(z.enum(["less_than_1_year", "1-2_years", "3-4_years", "5-10_years", "11-15_years", "more_than_15_years"]))
+        .optional()
+        .describe("Années d'expérience du candidat."),
+
+      diplomaLevels: z
+        .array(z.enum(["less_or_equal_than_1_year", "2_years", "3_years", "4_years", "5_years", "more_or_equal_than_6_years"]))
+        .optional()
+        .describe("Niveau de diplôme du candidat (années d'études après le bac)."),
+
+      sort: z
+        .enum(["relevance", "date", "experience", "next_availability_at", "daily_salary", "annual_salary"])
+        .optional()
+        .describe('Critère de tri : "relevance" (pertinence), "date", "experience", "next_availability_at", "daily_salary", "annual_salary".'),
+
+      order: z
+        .enum(["asc", "desc"])
+        .optional()
+        .describe('Ordre de tri : "asc" (croissant) ou "desc" (décroissant, défaut).'),
+
+      minDailySalary: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("TJM (taux journalier moyen) minimum souhaité en EUR."),
+
+      maxDailySalary: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("TJM (taux journalier moyen) maximum souhaité en EUR."),
+
+      minAnnualSalary: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Salaire annuel brut minimum souhaité en EUR."),
+
+      maxAnnualSalary: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Salaire annuel brut maximum souhaité en EUR."),
+
+      mobilities: z
+        .array(z.enum(["mobility", "residence"]))
+        .optional()
+        .describe('Filtrer sur mobilité ("mobility") ou lieu de résidence ("residence").'),
+
+      languages: z
+        .array(z.string())
+        .optional()
+        .describe('Langues parlées par le candidat (codes ISO, ex: ["fr", "en"]).'),
+
+      companyInExperiences: z
+        .string()
+        .max(250)
+        .optional()
+        .describe("Filtrer les candidats ayant travaillé dans une entreprise spécifique."),
+
+      certification: z
+        .string()
+        .max(250)
+        .optional()
+        .describe("Filtrer les candidats possédant une certification spécifique.")
     },
     annotations: { ...READ_ONLY, title: "TalentSearch · Recherche candidats" }
   },
-  async ({ query }) => {
+  async (params) => {
     const auth = bearerAuthorization();
     if (!auth) {
       return err(
@@ -86,7 +206,7 @@ server.registerTool(
       );
     }
     try {
-      const path = `/users/talentsearch${buildQuery(query)}`;
+      const path = `/users/talentsearch${buildQuery(params)}`;
       return ok(await apiGet(path, { Authorization: auth }));
     } catch (e) {
       return err(e);
@@ -101,9 +221,14 @@ server.registerTool(
   {
     title: "TalentSearch · Autocomplete métiers & compétences",
     description:
-      "GET /jobs_skills/autocomplete — suggestions de métiers et compétences à partir du préfixe q.",
+      `Autocomplétion de métiers et compétences (GET /jobs_skills/autocomplete). Ne nécessite pas d'authentification.
+Utiliser avant get_talent_search pour valider l'orthographe d'une compétence ou d'un métier.
+Retourne un tableau d'objets avec :
+- "name" : libellé affiché (ex: "React")
+- "slug" : identifiant technique (ex: "react")
+- "type" : "skill" (compétence technique) ou "job" (métier/poste)`,
     inputSchema: {
-      q: z.string().describe("Texte de recherche (préfixe ou terme)")
+      q: z.string().min(1).describe('Chaîne de recherche à compléter (ex: "react", "python", "chef de proj"). Retourne les métiers et compétences correspondants.')
     },
     annotations: {
       ...READ_ONLY,
@@ -127,17 +252,22 @@ server.registerTool(
   {
     title: "TalentSearch · Recherche lieux",
     description:
-      "GET /locations/search — géolocalisations (villes, régions). Paramètre obligatoire : search.",
+      `Recherche de lieux géolocalisés par nom (GET /locations/search). Ne nécessite pas d'authentification.
+TOUJOURS appeler cet outil avant get_talent_search pour obtenir la clé de lieu exacte.
+Exemple : search="Paris" → retourne key="fr~ile-de-france~paris~" à passer dans locations[] de get_talent_search.
+Retourne un tableau d'objets avec :
+- "key" : clé unique du lieu à utiliser dans get_talent_search (champ "locations")
+- "label" : libellé complet (ex: "Paris, France")
+- "shortLabel" : libellé court (ex: "Paris")
+- "locality", "postalCode", "adminLevel1", "adminLevel2", "country", "countryCode", "latitude", "longitude"`,
     inputSchema: {
-      search: z.string().min(1).describe("Terme de recherche lieu (ex. Paris, Lyon)"),
-      query: queryRecord
+      search: z.string().min(1).describe('Nom de la ville ou région à rechercher (ex: "Paris", "Lyon", "Lille", "Île-de-France"). Paramètre obligatoire.')
     },
     annotations: { ...READ_ONLY, title: "TalentSearch · Recherche lieux" }
   },
-  async ({ search, query }) => {
+  async ({ search }) => {
     try {
-      const merged = { ...query, search };
-      const path = `/locations/search${buildQuery(merged)}`;
+      const path = `/locations/search${buildQuery({ search })}`;
       return ok(await apiGet(path, {}));
     } catch (e) {
       return err(e);
@@ -149,6 +279,7 @@ server.registerTool(
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+
 if (!bearerAuthorization()) {
   console.error(
     "ℹ️ TURNOVERIT_API_TOKEN absent — get_talent_search sera indisponible jusqu'à configuration du jeton."
