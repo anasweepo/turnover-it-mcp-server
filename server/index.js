@@ -59,7 +59,7 @@ const READ_ONLY = {
   openWorldHint: true
 };
 
-const server = new McpServer({ name: "turnoverit", version: "1.0.1" });
+const server = new McpServer({ name: "turnoverit", version: "1.1.0" });
 
 // ─── TalentSearch (authentifié) ──────────────────────────────────────────────
 
