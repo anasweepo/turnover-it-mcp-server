@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "turnoverit-mcp",
   "display_name": "Turnover-IT MCP",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Serveur MCP pour l'API TalentSearch Turnover-IT (recherche candidats, autocomplete métiers/compétences, lieux).",
   "long_description": "Ce bundle expose l'API publique TalentSearch Turnover-IT via le Model Context Protocol : recherche dans la CVthèque (/users/talentsearch, authentifiée), autocomplete des métiers et compétences, et recherche de lieux. Le jeton API TalentSearch est optionnel si vous n'utilisez que les endpoints publics ; il est stocké localement pour les appels authentifiés.",
   "author": {
